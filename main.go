@@ -37,7 +37,7 @@ func (otty *OpenTTY) processCommand(input string) {
 	} else if mainCmd == "x11" {
 		otty.x11(arg)
 	} else {
-		otty.stdout += fmt.Sprintf("%s: command not found\n", mainCmd)
+		otty.stdout += fmt.Sprintf("%s: not found\n", mainCmd)
 	}
 }
 
