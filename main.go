@@ -75,7 +75,7 @@ func getArgument(input string) string {
 func main() {
 	otty := NewOpenTTY()
 	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("Welcome to OpenTTY (Go version)")
+	fmt.Println("Welcome to OpenTTY xg1")
 	for {
 		fmt.Printf("%s %s $ ", otty.username, otty.path)
 		if scanner.Scan() {
