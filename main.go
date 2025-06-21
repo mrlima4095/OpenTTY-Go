@@ -57,11 +57,11 @@ func (otty *OpenTTY) x11(command string) {
 }
 
 func getCommand(input string) string {
-	parts := strings.Fields(input)
+	parts := strings.Fields(input);
 	if len(parts) == 0 {
-		return ""
+		return "";
 	}
-	return parts[0]
+	return parts[0];
 }
 
 func getArgument(input string) string {
