@@ -43,7 +43,7 @@ func (otty *OpenTTY) processCommand(input string) {
 
 func (otty *OpenTTY) x11(command string) {
 	mainCmd := getCommand(command)
-	arg := getArgument(command)
+	// arg := getArgument(command)
 
 	if mainCmd == "init" {
 		otty.stdout += "[x11] Initialized GUI components\n"
