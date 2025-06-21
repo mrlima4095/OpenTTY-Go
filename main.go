@@ -66,11 +66,11 @@ func main() {
 	for {
 		fmt.Printf("%s %s $ ", otty.username, otty.path)
 		if scanner.Scan() {
-			line := scanner.Text()
-			otty.processCommand(line)
-			fmt.Print(otty.stdout)
-			otty.stdout = ""
-		} 
+			line := scanner.Text();
+			otty.processCommand(line);
+			fmt.Print(otty.stdout);
+			otty.stdout = "";
+		}
 		else { break; }
 	}
 }
