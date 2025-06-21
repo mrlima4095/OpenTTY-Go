@@ -56,8 +56,8 @@ func (otty *OpenTTY) x11(command string) {
 	}
 }
 
-func getCommand(input string) string { parts := strings.Fields(input); if len(parts) == 0 { return ""; } return parts[0]; }
-func getArgument(input string) string { parts := strings.Fields(input); if len(parts) <= 1 { return ""; } return strings.Join(parts[1:], " "); }
+func getCommand(input string) string { parts := strings.Fields(input); if len(parts) == 0 { return ""; } else { return parts[0]; } }
+func getArgument(input string) string { parts := strings.Fields(input); if len(parts) <= 1 { return ""; } else { l return strings.Join(parts[1:], " "); } }
 
 func main() {
 	otty := NewOpenTTY()
