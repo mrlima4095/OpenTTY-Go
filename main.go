@@ -70,7 +70,6 @@ func main() {
 			otty.processCommand(line);
 			fmt.Print(otty.stdout);
 			otty.stdout = "";
-		}
-		else { break; }
+		} else { break; }
 	}
 }
