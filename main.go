@@ -1,139 +1,122 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 )
 
-type OpenTTY struct {
-	username string
-	path     string
-	stdout   string
-	stdin    string
-	rmsDir   string
+// AppState holds the main application data and state.
+type AppState struct {
+	Username   string
+	Path       string
+	History    []string
+	StdoutText string
+	Build      string
 }
 
-func NewOpenTTY() *OpenTTY {
-	rmsPath := filepath.Join(os.TempDir(), "opentty_rms")
-	os.MkdirAll(rmsPath, 0755)
-	return &OpenTTY{
-		username: loadRMS("OpenRMS", rmsPath),
-		path:     "/home/",
-		stdout:   "",
-		stdin:    "",
-		rmsDir:   rmsPath,
-	}
-}
-
-func (otty *OpenTTY) processCommand(input string) {
-	cmd := strings.TrimSpace(input)
-	mainCmd := getCommand(cmd)
-	arg := getArgument(cmd)
-
-	if mainCmd == "echo" {
-		otty.stdout += arg + "\n"
-	} else if mainCmd == "clear" {
-		otty.stdout = ""
-	} else if mainCmd == "xterm" {
-		otty.stdout += "[xterm] switching to main terminal screen\n"
-	} else if mainCmd == "x11" {
-		otty.x11(arg)
-	} else {
-		otty.stdout += fmt.Sprintf("%s: not found\n", mainCmd)
-	}
-}
-
-func (otty *OpenTTY) x11(command string) {
-	mainCmd := getCommand(command)
-	if mainCmd == "init" {
-		otty.stdout += "[x11] Initialized GUI components\n"
-	} else if mainCmd == "stop" {
-		otty.stdout += "[x11] GUI stopped\n"
-	} else if mainCmd == "term" {
-		otty.stdout += "[x11] Returning to terminal\n"
-	} else {
-		otty.stdout += fmt.Sprintf("x11: %s: not found\n", mainCmd)
-	}
-}
-
-// loadRMS simula a leitura de dados persistentes (RMS)
-func loadRMS(name, basePath string) string {
-	path := filepath.Join(basePath, name)
-	data, err := ioutil.ReadFile(path)
+// LoadRMS simulates reading persistent data (replace with file or database as needed)
+func LoadRMS(key string) string {
+	// Example: Read from a file; you can enhance this as needed
+	filename := filepath.Join(".", key+".rms")
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return ""
 	}
 	return string(data)
 }
 
-// writeRMS simula a escrita em um RMS (persistência simples por arquivo)
-func writeRMS(name, content, basePath string) {
-	path := filepath.Join(basePath, name)
-	_ = ioutil.WriteFile(path, []byte(content), 0644)
+// WriteRMS simulates writing persistent data
+func WriteRMS(key, value string) {
+	filename := filepath.Join(".", key+".rms")
+	_ = os.WriteFile(filename, []byte(value), 0644)
 }
 
-// getcontent retorna o conteúdo de um pseudo-arquivo ou string literal
-func (otty *OpenTTY) getcontent(file string) string {
-	if strings.HasPrefix(file, "/") {
-		return otty.read(file)
-	}
-	return file
-}
-
-// read faz leitura condicional conforme a origem do caminho (/home/, /mnt/, ou asset)
-func (otty *OpenTTY) read(filename string) string {
-	if strings.HasPrefix(filename, "/home/") {
-		return loadRMS(strings.TrimPrefix(filename, "/home/"), otty.rmsDir)
-	} else if strings.HasPrefix(filename, "/mnt/") {
-		sysPath := filepath.FromSlash(strings.TrimPrefix(filename, "/mnt/"))
-		data, err := ioutil.ReadFile(sysPath)
-		if err != nil {
-			return fmt.Sprintf("read error: %v", err)
-		}
-		return string(data)
-	} else {
-		assetPath := filepath.Join("assets", strings.TrimPrefix(filename, "/"))
-		data, err := ioutil.ReadFile(assetPath)
-		if err != nil {
-			return fmt.Sprintf("asset error: %v", err)
-		}
-		return string(data)
-	}
-}
-
-func getCommand(input string) string {
-	parts := strings.Fields(input)
-	if len(parts) == 0 {
+// ProcessCommand handles a command string; stub for now
+func (state *AppState) ProcessCommand(cmd string) string {
+	cmd = strings.TrimSpace(cmd)
+	if cmd == "" {
 		return ""
 	}
-	return parts[0]
-}
-
-func getArgument(input string) string {
-	parts := strings.Fields(input)
-	if len(parts) <= 1 {
+	state.History = append(state.History, cmd)
+	switch cmd {
+	case "help":
+		return "Available commands: help, history, clear, nano, exit"
+	case "history":
+		return strings.Join(state.History, "\n")
+	case "clear":
+		state.StdoutText = ""
 		return ""
+	case "nano":
+		return "(Nano editor not implemented yet)"
+	case "exit":
+		os.Exit(0)
 	}
-	return strings.Join(parts[1:], " ")
+	return fmt.Sprintf("You entered: %s", cmd)
 }
 
 func main() {
-	otty := NewOpenTTY()
-	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("Welcome to OpenTTY 1.15\nCopyright (C) 2025 - Mr. Lima\n")
-	for {
-		fmt.Printf("%s %s $ ", otty.username, otty.path)
-		if scanner.Scan() {
-			line := scanner.Text()
-			otty.processCommand(line)
-			fmt.Print(otty.stdout)
-			otty.stdout = ""
-		} else {
-			break
-		}
+	a := app.New()
+	w := a.NewWindow("OpenTTY 0.6.2")
+
+	// App state
+	state := &AppState{
+		Username: LoadRMS("OpenRMS"),
+		Path:     "/home/",
+		History:  []string{},
+		Build:    "2025-1.15-02x06",
 	}
+
+	// UI widgets
+	stdin := widget.NewEntry()
+	stdin.SetPlaceHolder("Command")
+	stdout := widget.NewMultiLineEntry()
+	stdout.SetText(fmt.Sprintf("Welcome to OpenTTY 0.6.2\nCopyright (C) 2025 - Mr. Lima\n"))
+
+	// Set up buttons
+	executeBtn := widget.NewButton("Send", func() {
+		command := stdin.Text
+		output := state.ProcessCommand(command)
+		if output != "" {
+			stdout.SetText(stdout.Text + "\n" + output)
+		}
+		stdin.SetText("")
+	})
+	helpBtn := widget.NewButton("Help", func() {
+		output := state.ProcessCommand("help")
+		stdout.SetText(stdout.Text + "\n" + output)
+	})
+	nanoBtn := widget.NewButton("Nano", func() {
+		output := state.ProcessCommand("nano")
+		stdout.SetText(stdout.Text + "\n" + output)
+	})
+	clearBtn := widget.NewButton("Clear", func() {
+		state.StdoutText = ""
+		stdout.SetText("")
+	})
+	historyBtn := widget.NewButton("History", func() {
+		output := state.ProcessCommand("history")
+		stdout.SetText(stdout.Text + "\n" + output)
+	})
+
+	btns := container.NewHBox(executeBtn, helpBtn, nanoBtn, clearBtn, historyBtn)
+	content := container.NewVBox(stdout, stdin, btns)
+
+	w.SetContent(content)
+	w.Resize(fyne.NewSize(520, 360))
+
+	// Save nano content and exit
+	w.SetCloseIntercept(func() {
+		WriteRMS("nano", "") // Save nano content here, implement editor later
+		a.Quit()
+	})
+
+	w.ShowAndRun()
 }
