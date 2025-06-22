@@ -18,11 +18,12 @@ type AppState struct {
 	Username     string
 	Path         string
 	History      []string
-	StdoutText   string
 	Build        string
 	nanoContent  string
 	StdinEntry   *widget.Entry
-	StdoutWidget *widget.Entry
+	StdoutView   *widget.MultiLineEntry
+	SelectedCmd  string
+	MainTitle    string
 }
 
 func LoadRMS(key string) string {
@@ -39,6 +40,10 @@ func WriteRMS(key, value string) {
 	_ = os.WriteFile(filename, []byte(value), 0644)
 }
 
+func (state *AppState) AppendOutput(text string) {
+	state.StdoutView.SetText(state.StdoutView.Text + "\n" + text)
+}
+
 func (state *AppState) ProcessCommand(cmd string) string {
 	cmd = strings.TrimSpace(cmd)
 	if cmd == "" {
@@ -51,7 +56,7 @@ func (state *AppState) ProcessCommand(cmd string) string {
 		OpenHistoryViewer(state)
 		return "[history viewer opened]"
 	case "clear":
-		state.StdoutText = ""
+		state.StdoutView.SetText("")
 		return ""
 	case "nano":
 		OpenNanoEditor(state)
@@ -88,37 +93,46 @@ func OpenNanoEditor(state *AppState) {
 }
 
 func OpenHistoryViewer(state *AppState) {
-	historyWin := fyne.CurrentApp().NewWindow("Command History")
+	historyWin := fyne.CurrentApp().NewWindow(state.MainTitle)
 
-	items := make([]fyne.CanvasObject, len(state.History))
-	for i, cmd := range state.History {
-		label := widget.NewLabel(cmd)
-		runBtn := widget.NewButton("Run", func(c string) func() {
-			return func() {
-				output := state.ProcessCommand(c)
-				if output != "" {
-					state.StdoutWidget.SetText(state.StdoutWidget.Text + "\n" + output)
-				}
-			}
-		}(cmd))
+	list := widget.NewList(
+		func() int {
+			return len(state.History)
+		},
+		func() fyne.CanvasObject {
+			return widget.NewLabel("")
+		},
+		func(i int, o fyne.CanvasObject) {
+			o.(*widget.Label).SetText(state.History[i])
+		},
+	)
 
-		editBtn := widget.NewButton("Edit", func(c string) func() {
-			return func() {
-				state.StdinEntry.SetText(c)
-			}
-		}(cmd))
-
-		row := container.NewBorder(nil, nil, label, container.NewHBox(runBtn, editBtn))
-		items[i] = row
+	list.OnSelected = func(id int) {
+		state.SelectedCmd = state.History[id]
 	}
 
-	list := container.NewVBox(items...)
+	runBtn := widget.NewButton("Run", func() {
+		if state.SelectedCmd != "" {
+			output := state.ProcessCommand(state.SelectedCmd)
+			if output != "" {
+				state.AppendOutput(output)
+			}
+		}
+	})
+
+	editBtn := widget.NewButton("Edit", func() {
+		if state.SelectedCmd != "" {
+			state.StdinEntry.SetText(state.SelectedCmd)
+		}
+	})
+
 	closeBtn := widget.NewButton("Close", func() {
 		historyWin.Close()
 	})
 
-	layout := container.NewBorder(nil, closeBtn, nil, nil, list)
-	
+	buttons := container.NewHBox(runBtn, editBtn, closeBtn)
+	layout := container.NewBorder(nil, buttons, nil, nil, list)
+
 	historyWin.SetContent(layout)
 	historyWin.Resize(fyne.NewSize(500, 400))
 	historyWin.Show()
@@ -126,56 +140,64 @@ func OpenHistoryViewer(state *AppState) {
 
 func main() {
 	a := app.New()
-	w := a.NewWindow("OpenTTY 1.16")
+	mainTitle := "OpenTTY Terminal"
+	w := a.NewWindow(mainTitle)
+
+	username := LoadRMS("OpenRMS")
+	path := "/home/"
 
 	stdin := widget.NewEntry()
-	stdin.SetPlaceHolder("Command")
-
 	stdout := widget.NewMultiLineEntry()
 	stdout.Wrapping = fyne.TextWrapWord
 	stdout.SetText("Welcome to OpenTTY 0.6.2\nCopyright (C) 2025 - Mr. Lima\n")
 	stdout.SetMinRowsVisible(25)
 
 	state := &AppState{
-		Username:      LoadRMS("OpenRMS"),
-		Path:          "/home/",
-		History:       []string{},
-		Build:         "2025-1.15-02x06",
-		nanoContent:   LoadRMS("nano"),
-		StdinEntry:    stdin,
-		StdoutWidget: stdout,
+		Username:     username,
+		Path:         path,
+		History:      []string{},
+		Build:        "2025-1.15-02x06",
+		nanoContent:  LoadRMS("nano"),
+		StdinEntry:   stdin,
+		StdoutView:   stdout,
+		SelectedCmd:  "",
+		MainTitle:    mainTitle,
 	}
 
-	executeBtn := widget.NewButton("Send", func() {
-		command := stdin.Text
+	stdin.SetPlaceHolder(fmt.Sprintf("%s %s $ ", state.Username, state.Path))
+
+	stdin.OnSubmitted = func(command string) {
 		if strings.TrimSpace(command) != "" {
 			state.History = append(state.History, command)
 		}
 		output := state.ProcessCommand(command)
 		if output != "" {
-			stdout.SetText(stdout.Text + "\n" + output)
+			state.AppendOutput(output)
 		}
 		stdin.SetText("")
+	}
+
+	executeBtn := widget.NewButton("Send", func() {
+		stdin.OnSubmitted(stdin.Text)
 	})
 
 	helpBtn := widget.NewButton("Help", func() {
 		output := state.ProcessCommand("help")
-		stdout.SetText(stdout.Text + "\n" + output)
+		state.AppendOutput(output)
 	})
 
 	nanoBtn := widget.NewButton("Nano", func() {
 		output := state.ProcessCommand("nano")
-		stdout.SetText(stdout.Text + "\n" + output)
+		state.AppendOutput(output)
 	})
 
 	clearBtn := widget.NewButton("Clear", func() {
-		state.StdoutText = ""
-		stdout.SetText("")
+		state.StdoutView.SetText("")
 	})
 
 	historyBtn := widget.NewButton("History", func() {
 		output := state.ProcessCommand("history")
-		stdout.SetText(stdout.Text + "\n" + output)
+		state.AppendOutput(output)
 	})
 
 	btns := container.NewHBox(executeBtn, helpBtn, nanoBtn, clearBtn, historyBtn)
