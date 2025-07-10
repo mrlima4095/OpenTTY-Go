@@ -1,215 +1,114 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"net"
 	"os"
-	"path/filepath"
+	"os/signal"
 	"strings"
-
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/widget"
 )
 
-type AppState struct {
-	version      string
-	Username     string
-	Path         string
-	History      []string
-	Build        string
-	nanoContent  string
-	StdinEntry   *widget.Entry
-	StdoutView   *widget.MultiLineEntry
-	SelectedCmd  string
-	MainTitle    string
+const (
+	DEFAULT_PORT   = "31522"
+	END_OF_OUTPUT  = "<<<END>>>"
+)
+
+var (
+	username string
+	hostname string
+	path     string
+	conn     net.Conn
+)
+
+func parseAddress(arg string) string {
+	if strings.Contains(arg, ":") {
+		return arg
+	}
+	return arg + ":" + DEFAULT_PORT
 }
 
-func LoadRMS(key string) string {
-	filename := filepath.Join(".", key+".rms")
-	data, err := os.ReadFile(filename)
+func clearTerminal() {
+	fmt.Print("\033[2J\033[H")
+}
+
+func sendAndReceive(cmd string) string {
+	_, err := fmt.Fprintln(conn, cmd)
 	if err != nil {
-		return ""
-	}
-	return string(data)
-}
-
-func WriteRMS(key, value string) {
-	filename := filepath.Join(".", key+".rms")
-	_ = os.WriteFile(filename, []byte(value), 0644)
-}
-
-func (state *AppState) AppendOutput(text string) {
-	state.StdoutView.SetText(state.StdoutView.Text + "\n" + text)
-}
-
-func (state *AppState) ProcessCommand(cmd string) string {
-	cmd = strings.TrimSpace(cmd)
-	if cmd == "" {
-		return ""
-	}
-	switch cmd {
-	case "help":
-		return "Available commands: help, history, clear, nano, exit"
-	case "history":
-		OpenHistoryViewer(state)
-		return "[history viewer opened]"
-	case "clear":
-		state.StdoutView.SetText("")
-		return ""
-	case "nano":
-		OpenNanoEditor(state)
-		return "[nano editor opened]"
-	case "exit":
-		os.Exit(0)
-	}
-	return fmt.Sprintf("%s: not found", cmd)
-}
-
-func OpenNanoEditor(state *AppState) {
-	nanoWin := fyne.CurrentApp().NewWindow("Nano")
-
-	editor := widget.NewMultiLineEntry()
-	editor.SetText(LoadRMS("nano"))
-
-	saveBtn := widget.NewButton("Save", func() {
-		text := editor.Text
-		state.nanoContent = text
-		WriteRMS("nano", text)
-		nanoWin.Close()
-	})
-
-	cancelBtn := widget.NewButton("Cancel", func() {
-		nanoWin.Close()
-	})
-
-	buttons := container.NewHBox(saveBtn, cancelBtn)
-	layout := container.NewBorder(nil, buttons, nil, nil, editor)
-
-	nanoWin.SetContent(layout)
-	nanoWin.Resize(fyne.NewSize(500, 400))
-	nanoWin.Show()
-}
-
-func OpenHistoryViewer(state *AppState) {
-	historyWin := fyne.CurrentApp().NewWindow(state.MainTitle)
-
-	list := widget.NewList(
-		func() int {
-			return len(state.History)
-		},
-		func() fyne.CanvasObject {
-			return widget.NewLabel("")
-		},
-		func(i int, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(state.History[i])
-		},
-	)
-
-	list.OnSelected = func(id int) {
-		state.SelectedCmd = state.History[id]
+		return "[erro ao enviar comando]"
 	}
 
-	runBtn := widget.NewButton("Run", func() {
-		if state.SelectedCmd != "" {
-			output := state.ProcessCommand(state.SelectedCmd)
-			if output != "" {
-				state.AppendOutput(output)
-			}
+	var output strings.Builder
+	reader := bufio.NewReader(conn)
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			output.WriteString("[erro na leitura da resposta]\n")
+			break
 		}
-	})
-
-	editBtn := widget.NewButton("Edit", func() {
-		if state.SelectedCmd != "" {
-			state.StdinEntry.SetText(state.SelectedCmd)
+		line = strings.TrimRight(line, "\r\n")
+		if line == END_OF_OUTPUT {
+			break
 		}
-	})
+		output.WriteString(line + "\n")
+	}
+	return output.String()
+}
 
-	closeBtn := widget.NewButton("Close", func() {
-		historyWin.Close()
-	})
+func updatePromptInfo() {
+	username = sendAndReceive("whoami")
+	hostname = sendAndReceive("hostname")
+	path = sendAndReceive("pwd")
+}
 
-	buttons := container.NewHBox(runBtn, editBtn, closeBtn)
-	layout := container.NewBorder(nil, buttons, nil, nil, list)
-
-	historyWin.SetContent(layout)
-	historyWin.Resize(fyne.NewSize(500, 400))
-	historyWin.Show()
+func prompt() string {
+	return fmt.Sprintf("%s@%s:%s$ ", username, hostname, path)
 }
 
 func main() {
-	a := app.New()
-	mainTitle := "OpenTTY Terminal"
-	w := a.NewWindow(mainTitle)
-
-	username := LoadRMS("OpenRMS")
-	path := "/home/"
-
-	stdin := widget.NewEntry()
-	stdout := widget.NewMultiLineEntry()
-	stdout.Wrapping = fyne.TextWrapWord
-	stdout.SetText("Welcome to OpenTTY 0.6.2\nCopyright (C) 2025 - Mr. Lima\n")
-	stdout.SetMinRowsVisible(25)
-
-	state := &AppState{
-		Username:     username,
-		Path:         path,
-		History:      []string{},
-		Build:        "2025-1.15-02x06",
-		nanoContent:  LoadRMS("nano"),
-		StdinEntry:   stdin,
-		StdoutView:   stdout,
-		SelectedCmd:  "",
-		MainTitle:    mainTitle,
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: optty <host[:port]>")
+		return
 	}
 
-	stdin.SetPlaceHolder(fmt.Sprintf("%s %s $ ", state.Username, state.Path))
-
-	stdin.OnSubmitted = func(command string) {
-		if strings.TrimSpace(command) != "" {
-			state.History = append(state.History, command)
-		}
-		output := state.ProcessCommand(command)
-		if output != "" {
-			state.AppendOutput(output)
-		}
-		stdin.SetText("")
+	address := parseAddress(os.Args[1])
+	var err error
+	conn, err = net.Dial("tcp", address)
+	if err != nil {
+		fmt.Println("Erro ao conectar:", err)
+		return
 	}
+	defer conn.Close()
 
-	executeBtn := widget.NewButton("Send", func() {
-		stdin.OnSubmitted(stdin.Text)
-	})
+	clearTerminal()
+	sendAndReceive("execute install nano; touch; add screen.title=OpenTTY GO; add screen.title=OpenTTY Go; add screen.back.label=Exit; add screen.back=execute exit; add screen.button=Return; add screen.button.cmd=exec unalias xterm & xterm & stop bind; add screen.fields=notes; add screen.notes.type=text; add screen.notes.value=You're accessing this Device via OpenTTY Golang.; install go-term; alias xterm=x11 make go-term; xterm;")
+	updatePromptInfo()
 
-	helpBtn := widget.NewButton("Help", func() {
-		output := state.ProcessCommand("help")
-		state.AppendOutput(output)
-	})
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+	go func() {
+		for range sig {
+			clearTerminal()
+			updatePromptInfo()
+		}
+	}()
 
-	nanoBtn := widget.NewButton("Nano", func() {
-		output := state.ProcessCommand("nano")
-		state.AppendOutput(output)
-	})
+	scanner := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Print(prompt())
 
-	clearBtn := widget.NewButton("Clear", func() {
-		state.StdoutView.SetText("")
-	})
+		if !scanner.Scan() {
+			fmt.Println("\nSaindo...")
+			return
+		}
 
-	historyBtn := widget.NewButton("History", func() {
-		output := state.ProcessCommand("history")
-		state.AppendOutput(output)
-	})
+		cmd := scanner.Text()
+		if cmd == "" {
+			continue
+		}
 
-	btns := container.NewHBox(executeBtn, helpBtn, nanoBtn, clearBtn, historyBtn)
-	term := container.NewBorder(nil, container.NewVBox(stdin, btns), nil, nil, stdout)
-
-	w.SetContent(container.New(layout.NewMaxLayout(), term))
-	w.Resize(fyne.NewSize(800, 600))
-
-	w.SetCloseIntercept(func() {
-		WriteRMS("nano", state.nanoContent)
-		a.Quit()
-	})
-
-	w.ShowAndRun()
+		output := sendAndReceive(cmd)
+		fmt.Print(output)
+	}
 }
