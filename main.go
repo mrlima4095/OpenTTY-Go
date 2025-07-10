@@ -82,7 +82,8 @@ func main() {
 	defer conn.Close()
 
 	clearTerminal()
-	sendAndReceive("execute install nano; touch; add screen.title=OpenTTY GO; add screen.title=OpenTTY Go; add screen.back.label=Exit; add screen.back=execute exit; add screen.button=Return; add screen.button.cmd=exec unalias xterm & xterm & stop bind; add screen.fields=notes; add screen.notes.type=text; add screen.notes.value=You're accessing this Device via OpenTTY Golang.; install go-term; alias xterm=x11 make go-term; xterm;")
+	fmt.Fprintln(conn, `execute install nano; touch; add screen.title=OpenTTY GO; add screen.title=OpenTTY Go; add screen.back.label=Exit; add screen.back=execute exit; add screen.button=Return; add screen.button.cmd=exec unalias xterm & xterm & stop bind; add screen.fields=notes; add screen.notes.type=text; add screen.notes.value=You're accessing this Device via OpenTTY Golang.; install go-term; alias xterm=x11 make go-term; xterm;`)
+
 	updatePromptInfo()
 
 	sig := make(chan os.Signal, 1)
