@@ -57,9 +57,9 @@ func sendAndReceive(cmd string) string {
 }
 
 func updatePromptInfo() {
-	username = sendAndReceive("whoami")
-	hostname = sendAndReceive("hostname")
-	path = sendAndReceive("pwd")
+	username = strings.TrimSpace(sendAndReceive("whoami"))
+	hostname = strings.TrimSpace(sendAndReceive("hostname"))
+	path = strings.TrimSpace(sendAndReceive("pwd"))
 }
 
 func prompt() string {
