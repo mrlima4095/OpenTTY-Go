@@ -33,26 +33,25 @@ func clearTerminal() {
 }
 
 func sendAndReceive(cmd string) string {
+	// Envia comando
 	_, err := fmt.Fprintln(conn, cmd)
 	if err != nil {
 		return "[erro ao enviar comando]"
 	}
 
 	var output strings.Builder
-	reader := bufio.NewReader(conn)
+	buffer := make([]byte, 4096)
+	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)) // timeout de 200ms
 
 	for {
-		line, err := reader.ReadString('\n')
+		n, err := conn.Read(buffer)
 		if err != nil {
-			output.WriteString("[erro na leitura da resposta]\n")
-			break
+			break // timeout ou fim de dados
 		}
-		line = strings.TrimRight(line, "\r\n")
-		if line == END_OF_OUTPUT {
-			break
-		}
-		output.WriteString(line + "\n")
+		output.Write(buffer[:n])
+		conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)) // renova timeout
 	}
+
 	return output.String()
 }
 
